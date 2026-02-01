@@ -153,11 +153,21 @@ class MagasinApp(QWidget):
             QPushButton:hover { background-color: #E91E63; }
         """)
         
+        self.btn_hist_article = QPushButton("Hist. Article")
+        self.btn_hist_article.clicked.connect(self.ouvrir_historique_article)
+        
+        self.btn_hist_dest = QPushButton("Hist. par Bureau/CB")
+        self.btn_hist_dest.clicked.connect(self.ouvrir_historique_par_destinataire)
+
+        crud.addWidget(self.btn_hist_article)
+        crud.addWidget(self.btn_hist_dest)
+
+
         self.btn_affecter.clicked.connect(self.open_affectation)
         crud.addWidget(self.btn_affecter)
 
         self.btn_historique = QPushButton("Historique Mouvements")
-        self.btn_historique.clicked.connect(self.ouvrir_historique_global)
+        self.btn_historique.clicked.connect(self.ouvrir_historique_article)
         crud.addWidget(self.btn_historique)       
 
         main = QVBoxLayout()
@@ -486,42 +496,247 @@ class MagasinApp(QWidget):
             QMessageBox.critical(self, "Erreur", str(e))
         finally:
             conn.close()    
+    def ouvrir_historique_article(self):
+        """ Historique complet d'un article sélectionné """
+        if self.current_id is None:
+            QMessageBox.warning(self, "Sélection requise", "Veuillez sélectionner un article dans la liste.")
+            return
 
-    def ouvrir_historique_global(self):
-        from PyQt5.QtWidgets import QDialog, QTableWidget, QVBoxLayout, QHeaderView
+        row = self.table.currentRow()
+        nom_article = self.table.item(row, 0).text()
+        id_article = self.current_id
+
+        self._ouvrir_fenetre_historique(
+            title=f"Historique - {nom_article}",
+            filtre_article=id_article,
+            prefiltre_article=True
+        )
+
+
+    def ouvrir_historique_par_destinataire(self):
+        """ Historique de tous les mouvements vers un bureau / CB donné """
+        from PyQt5.QtWidgets import QInputDialog
+
+        dest, ok = QInputDialog.getItem(
+            self,
+            "Filtrer par destinataire",
+            "Choisir le bureau ou CB :",
+            [""] + DESTINATAIRES,  # "" pour "tous"
+            0,
+            False
+        )
+
+        if not ok or not dest:
+            return
+
+        title = f"Historique - {dest}" if dest else "Historique complet tous destinataires"
+
+        self._ouvrir_fenetre_historique(
+            title=title,
+            filtre_destinataire=dest if dest else None
+        )
+
+    def _ouvrir_fenetre_historique(self, title="Historique des Mouvements", 
+                                 filtre_article=None, prefiltre_article=False,
+                                 filtre_destinataire=None):
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QHeaderView, QLabel, QLineEdit, QComboBox
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("Historique des Mouvements")
-        dialog.resize(1000, 600)
+        dialog.setWindowTitle(title)
+        dialog.resize(1100, 680)
 
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Barre de filtres rapide
+        filtres = QHBoxLayout()
+
+        lbl_article = QLabel("Article :")
+        edit_article = QLineEdit()
+        if prefiltre_article:
+            edit_article.setText(title.split(" - ")[-1])  # nom déjà connu
+            edit_article.setReadOnly(True)
+
+        lbl_dest = QLabel("Destinataire :")
+        combo_dest = QComboBox()
+        combo_dest.addItem("Tous", "")
+        combo_dest.addItems(DESTINATAIRES)
+        if filtre_destinataire:
+            index = combo_dest.findData(filtre_destinataire)
+            if index >= 0:
+                combo_dest.setCurrentIndex(index)
+
+        lbl_type = QLabel("Type :")
+        combo_type = QComboBox()
+        combo_type.addItems(["Tous", "ENTREE", "SORTIE"])
+
+        filtres.addWidget(lbl_article)
+        filtres.addWidget(edit_article)
+        filtres.addSpacing(15)
+        filtres.addWidget(lbl_dest)
+        filtres.addWidget(combo_dest)
+        filtres.addSpacing(15)
+        filtres.addWidget(lbl_type)
+        filtres.addWidget(combo_type)
+        filtres.addStretch()
+
+        layout.addLayout(filtres)
+
+        # Tableau
         table = QTableWidget()
-        table.setColumnCount(7)
+        table.setColumnCount(8)
         table.setHorizontalHeaderLabels([
-            "Article", "Type", "Quantité", "Date", "Destinataire/Service", "Observation", "ID mvt"
+            "Date", "Type", "Article", "Qté", "Destinataire", "Observation", "Stock après", "ID"
         ])
+        table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.verticalHeader().setVisible(False)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        layout.addWidget(table)
+
+        def charger():
+            article_txt = edit_article.text().strip()
+            dest_val = combo_dest.currentData()
+            type_val = combo_type.currentText()
+
+            conn = get_conn()
+            c = conn.cursor()
+
+            query = """
+                SELECT 
+                    m.date_mvt,
+                    m.type,
+                    p.nom,
+                    m.quantite,
+                    m.service,
+                    m.observation,
+                    p.quantite AS stock_apres,
+                    m.id
+                FROM mouvements m
+                JOIN produits p ON m.produit_id = p.id
+                WHERE 1=1
+            """
+            params = []
+
+            if filtre_article is not None:
+                query += " AND m.produit_id = ?"
+                params.append(filtre_article)
+            elif article_txt:
+                query += " AND p.nom LIKE ?"
+                params.append(f"%{article_txt}%")
+
+            if dest_val:
+                query += " AND m.service = ?"
+                params.append(dest_val)
+
+            if type_val != "Tous":
+                query += " AND m.type = ?"
+                params.append(type_val)
+
+            query += " ORDER BY m.date_mvt DESC LIMIT 2000"
+
+            c.execute(query, params)
+            rows = c.fetchall()
+            conn.close()
+
+            table.setRowCount(len(rows))
+
+            for i, row in enumerate(rows):
+                for j, val in enumerate(row):
+                    item = QTableWidgetItem(str(val) if val is not None else "")
+                    
+                    if j == 1:  # Type
+                        color = "#2E7D32" if val == "ENTREE" else "#D32F2F" if val == "SORTIE" else "#555"
+                        item.setForeground(QColor(color))
+                    
+                    if j == 3:  # Quantité
+                        item.setTextAlignment(Qt.AlignCenter)
+                        if row[1] == "SORTIE":
+                            item.setText(f"-{val}")
+                    
+                    if j == 6:  # Stock après
+                        item.setTextAlignment(Qt.AlignRight)
+                    
+                    table.setItem(i, j, item)
+
+            table.resizeRowsToContents()
+
+        # Connexions pour rafraîchissement automatique
+        edit_article.textChanged.connect(charger)
+        combo_dest.currentIndexChanged.connect(charger)
+        combo_type.currentIndexChanged.connect(charger)
+
+        # Chargement initial
+        charger()
+
+        dialog.exec_()
+    
+    def charger_historique(self, table):
+        article_filter = self.filter_article_hist.text().strip()
+        dest_filter = self.filter_dest_hist.currentData()
+        type_filter = self.filter_type_hist.currentText()
 
         conn = get_conn()
         c = conn.cursor()
-        c.execute("""
-            SELECT p.nom, m.type, m.quantite, m.date_mvt, m.service, m.observation, m.id
+
+        query = """
+            SELECT 
+                m.date_mvt,
+                m.type,
+                p.nom,
+                m.quantite,
+                m.service,
+                m.observation,
+                p.quantite as stock_apres,
+                m.id
             FROM mouvements m
             JOIN produits p ON m.produit_id = p.id
-            ORDER BY m.date_mvt DESC
-            LIMIT 500
-        """)
+            WHERE 1=1
+        """
+        params = []
+
+        if article_filter:
+            query += " AND p.nom LIKE ?"
+            params.append(f"%{article_filter}%")
+
+        if dest_filter:
+            query += " AND m.service = ?"
+            params.append(dest_filter)
+
+        if type_filter != "Tous":
+            query += " AND m.type = ?"
+            params.append(type_filter)
+
+        query += " ORDER BY m.date_mvt DESC LIMIT 1500"
+
+        c.execute(query, params)
         rows = c.fetchall()
         conn.close()
 
         table.setRowCount(len(rows))
+
         for i, row in enumerate(rows):
-            for j, val in enumerate(row):
-                item = QTableWidgetItem(str(val))
-                if j == 2:  # Quantité
+            for j, value in enumerate(row):
+                item = QTableWidgetItem(str(value) if value is not None else "")
+                
+                # Mise en forme selon type
+                if j == 1:  # Type
+                    if value == "SORTIE":
+                        item.setForeground(QColor("#D32F2F"))
+                    elif value == "ENTREE":
+                        item.setForeground(QColor("#2E7D32"))
+                
+                if j == 3:  # Quantité
                     item.setTextAlignment(Qt.AlignCenter)
+                    if row[1] == "SORTIE":
+                        item.setText(f"-{value}")
+                
+                if j == 6:  # Stock après
+                    item.setTextAlignment(Qt.AlignRight)
+                    item.setForeground(QColor("#1976D2"))
+
                 table.setItem(i, j, item)
 
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(table)
-        dialog.setLayout(layout)
-        dialog.exec_()
+        table.resizeRowsToContents()
