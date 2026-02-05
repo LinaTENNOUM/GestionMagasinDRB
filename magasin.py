@@ -6,7 +6,6 @@ from datetime import datetime
 from database import get_conn
 from widgets import ModernComboBox, StyledItemDelegate
 from export_utils import export_excel, export_pdf
-from mouvements import MouvementWindow
 
 DESTINATAIRES = [
     "CBW Alger", "CBW Boumerdes", "CBW Laghouat", "CBW Bouira",
@@ -25,6 +24,7 @@ class MagasinApp(QMainWindow):
         self.setWindowTitle("Gestion Magasin - DRB Alger")
         self.resize(1200, 700)
         self.setMinimumSize(1000, 600)
+
         self.setStyleSheet("""
             QWidget { font-family: Segoe UI, Arial; font-size: 12px; }
             QLineEdit, QSpinBox, QDoubleSpinBox {
@@ -45,42 +45,36 @@ class MagasinApp(QMainWindow):
             QLabel.badge { color: #D32F2F; font-weight: 600; }
         """)
 
-        # Widget central pour le contenu principal
+        # Widget central
         central = QWidget()
         self.setCentralWidget(central)
         main = QVBoxLayout(central)
+        main.setContentsMargins(15, 15, 15, 15)
+        main.setSpacing(12)
 
-        # === BARRE D'OUTILS EN HAUT (TOOLBAR) ===
-        toolbar = QToolBar("Outils principaux")
-        toolbar.setMovable(False)  # Fixe, non déplaçable
+        # === TOOLBAR EN HAUT ===
+        toolbar = QToolBar("Outils")
+        toolbar.setMovable(False)
         self.addToolBar(Qt.TopToolBarArea, toolbar)
 
-        # Bouton Historique Article
         btn_hist_article = QPushButton("Hist. Article")
         btn_hist_article.clicked.connect(self.ouvrir_historique_article)
         toolbar.addWidget(btn_hist_article)
 
-        # Bouton Historique par Bureau/CB
         btn_hist_dest = QPushButton("Hist. par Bureau/CB")
         btn_hist_dest.clicked.connect(self.ouvrir_historique_par_destinataire)
         toolbar.addWidget(btn_hist_dest)
 
-        # Bouton Affectation / Sortie
         self.btn_affecter = QPushButton("Affecter / Sortie")
         self.btn_affecter.setStyleSheet("""
-            QPushButton {
-                background-color: #D81B60; 
-                color: white; 
-                padding: 8px 16px; 
-                border-radius: 10px;
-            }
+            QPushButton { background-color: #D81B60; color: white; padding: 8px 16px; border-radius: 10px; }
             QPushButton:hover { background-color: #E91E63; }
         """)
         self.btn_affecter.clicked.connect(self.open_affectation)
-        self.btn_affecter.setEnabled(False)  # Désactivé par défaut
+        self.btn_affecter.setEnabled(False)
         toolbar.addWidget(self.btn_affecter)
 
-        # === RECHERCHE + FILTRE NATURE ===
+        # === RECHERCHE + FILTRE ===
         self.search = QLineEdit()
         self.search.setPlaceholderText("Rechercher par désignation...")
         self.search.textChanged.connect(self.load_table)
@@ -97,6 +91,14 @@ class MagasinApp(QMainWindow):
             self.filter_nature.addItem(cat, cat)
         self.filter_nature.currentIndexChanged.connect(self.load_table)
         self.filter_nature.setItemDelegate(StyledItemDelegate(self.filter_nature))
+
+        search_bar = QHBoxLayout()
+        search_bar.addWidget(QLabel("Recherche :"))
+        search_bar.addWidget(self.search)
+        search_bar.addSpacing(20)
+        search_bar.addWidget(QLabel("Nature :"))
+        search_bar.addWidget(self.filter_nature)
+        search_bar.addStretch()
 
         # === TABLEAU ===
         self.table = QTableWidget()
@@ -120,38 +122,11 @@ class MagasinApp(QMainWindow):
         self.nature.setItemDelegate(StyledItemDelegate(self.nature))
 
         self.quantite = QSpinBox(); self.quantite.setRange(0, 10_000_000)
-        self.prix = QDoubleSpinBox(); self.prix.setRange(0, 10_000_000); self.prix.setDecimals(2); self.prix.setSingleStep(1.0)
+        self.prix = QDoubleSpinBox(); self.prix.setRange(0, 10_000_000); self.prix.setDecimals(2)
         self.seuil = QSpinBox(); self.seuil.setRange(0, 10_000_000)
         self.date = QLineEdit(datetime.now().strftime("%Y-%m-%d"))
-        self.date.setPlaceholderText("YYYY-MM-DD")
         self.date.setMaximumWidth(150)
         self.observation = QLineEdit()
-        self.observation.setPlaceholderText("Ex: À commander, en panne, etc.")
-        self.observation.setMaximumWidth(280)
-
-        # === BOUTONS (CRUD en bas, sans les boutons déplacés en haut) ===
-        self.btn_add = QPushButton("Ajouter"); self.btn_add.clicked.connect(self.add_product)
-        self.btn_update = QPushButton("Modifier"); self.btn_update.clicked.connect(self.update_product); self.btn_update.setEnabled(False)
-        self.btn_delete = QPushButton("Supprimer"); self.btn_delete.clicked.connect(self.delete_product); self.btn_delete.setEnabled(False)
-        self.btn_clear = QPushButton("Nouveau / Vider"); self.btn_clear.clicked.connect(self.clear_form)
-        self.btn_export_xlsx = QPushButton("Exporter Excel (.xlsx)"); self.btn_export_xlsx.clicked.connect(self.on_export_excel)
-        self.btn_export_pdf = QPushButton("Exporter PDF"); self.btn_export_pdf.clicked.connect(self.on_export_pdf)
-        self.badge_low = QLabel("")
-
-        # === LAYOUTS ===
-        top = QHBoxLayout()
-        lbl = QLabel("Inventaire")
-        lbl.setProperty("class", "header")
-        top.addWidget(lbl)
-        top.addStretch()
-        top.addWidget(self.badge_low)
-
-        search_bar = QHBoxLayout()
-        search_bar.addWidget(QLabel("Recherche:"))
-        search_bar.addWidget(self.search)
-        search_bar.addWidget(QLabel("Filtre par Nature:"))
-        search_bar.addWidget(self.filter_nature)
-        search_bar.addStretch()
 
         form = QFormLayout()
         form.addRow("Désignation *", self.nom)
@@ -164,6 +139,15 @@ class MagasinApp(QMainWindow):
         hnums.addWidget(self._labeled("Seuil mini", self.seuil))
         hnums.addWidget(self._labeled("Date ajout", self.date))
 
+        # === BOUTONS CRUD + EXPORT ===
+        self.btn_add = QPushButton("Ajouter"); self.btn_add.clicked.connect(self.add_product)
+        self.btn_update = QPushButton("Modifier"); self.btn_update.clicked.connect(self.update_product); self.btn_update.setEnabled(False)
+        self.btn_delete = QPushButton("Supprimer"); self.btn_delete.clicked.connect(self.delete_product); self.btn_delete.setEnabled(False)
+        self.btn_clear = QPushButton("Nouveau / Vider"); self.btn_clear.clicked.connect(self.clear_form)
+        self.btn_export_xlsx = QPushButton("Exporter Excel"); self.btn_export_xlsx.clicked.connect(self.on_export_excel)
+        self.btn_export_pdf = QPushButton("Exporter PDF"); self.btn_export_pdf.clicked.connect(self.on_export_pdf)
+        self.badge_low = QLabel("")
+
         crud = QHBoxLayout()
         crud.addWidget(self.btn_add)
         crud.addWidget(self.btn_update)
@@ -172,6 +156,14 @@ class MagasinApp(QMainWindow):
         crud.addStretch()
         crud.addWidget(self.btn_export_xlsx)
         crud.addWidget(self.btn_export_pdf)
+
+        # === ASSEMBLAGE FINAL ===
+        top = QHBoxLayout()
+        lbl = QLabel("Inventaire")
+        lbl.setProperty("class", "header")
+        top.addWidget(lbl)
+        top.addStretch()
+        top.addWidget(self.badge_low)
 
         main.addLayout(top)
         main.addLayout(search_bar)
@@ -188,206 +180,270 @@ class MagasinApp(QMainWindow):
         vbox = QVBoxLayout(container)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(4)
-        
         lbl = QLabel(text)
         lbl.setStyleSheet("font-weight: bold; color: #2E3B55;")
-        
         vbox.addWidget(lbl)
         vbox.addWidget(widget)
-        
         return container
 
     def load_table(self):
-        search_text = self.search.text().strip().lower()
+        key = self.search.text().strip()
         nature_filter = self.filter_nature.currentData()
 
         conn = get_conn()
         c = conn.cursor()
-        query = "SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation, id FROM produits WHERE 1=1"
+        query = """SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation, id 
+                   FROM produits WHERE 1=1"""
         params = []
-
-        if search_text:
-            query += " AND LOWER(nom) LIKE ?"
-            params.append(f"%{search_text}%")
-
+        if key:
+            query += " AND nom LIKE ?"
+            params.append(f"%{key}%")
         if nature_filter:
             query += " AND nature = ?"
             params.append(nature_filter)
-
-        query += " ORDER BY date_ajout DESC"
-
+        query += " ORDER BY nom ASC"
         c.execute(query, params)
         rows = c.fetchall()
         conn.close()
 
         self.table.setRowCount(len(rows))
-
-        for i, row in enumerate(rows):
+        for i, r in enumerate(rows):
             for j in range(7):
-                item = QTableWidgetItem(str(row[j]) if row[j] is not None else "")
-                if j in (2, 4):  # Quantité, Seuil
+                item = QTableWidgetItem(str(r[j]) if r[j] is not None else "")
+                if j in (2, 3, 4):
                     item.setTextAlignment(Qt.AlignCenter)
-                if j == 3:  # Prix
-                    item.setTextAlignment(Qt.AlignRight)
+                if r[2] is not None and r[4] is not None and r[2] < r[4]:
+                    item.setForeground(QColor("#D32F2F"))
                 self.table.setItem(i, j, item)
-            # ID caché dans userData
-            self.table.item(i, 0).setData(Qt.UserRole, row[7])
-
-            # Colorer en rouge si quantite < seuil_min
-            qte = int(row[2] or 0)
-            seuil = int(row[4] or 0)
-            if qte < seuil:
-                for j in range(7):
-                    self.table.item(i, j).setForeground(QColor("#D32F2F"))
+            self.table.item(i, 0).setData(Qt.UserRole, r[7])  # ID caché
 
         self.table.resizeRowsToContents()
         self.update_badge()
 
     def on_row_click(self, index):
         row = index.row()
+        self.selected_id = self.table.item(row, 0).data(Qt.UserRole)
         self.nom.setText(self.table.item(row, 0).text())
-        nature_text = self.table.item(row, 1).text()
-        idx = self.nature.findText(nature_text)
-        if idx >= 0:
-            self.nature.setCurrentIndex(idx)
-        self.quantite.setValue(int(self.table.item(row, 2).text() or 0))
+        self.nature.setCurrentText(self.table.item(row, 1).text())
+        self.quantite.setValue(int(float(self.table.item(row, 2).text() or 0)))
         self.prix.setValue(float(self.table.item(row, 3).text() or 0))
-        self.seuil.setValue(int(self.table.item(row, 4).text() or 0))
+        self.seuil.setValue(int(float(self.table.item(row, 4).text() or 0)))
         self.date.setText(self.table.item(row, 5).text())
         self.observation.setText(self.table.item(row, 6).text())
-        self.selected_id = self.table.item(row, 0).data(Qt.UserRole)
         self.btn_update.setEnabled(True)
         self.btn_delete.setEnabled(True)
         self.btn_affecter.setEnabled(True)
 
     def clear_form(self):
+        self.selected_id = None
         self.nom.clear()
         self.nature.setCurrentIndex(0)
         self.quantite.setValue(0)
-        self.prix.setValue(0)
+        self.prix.setValue(0.0)
         self.seuil.setValue(0)
         self.date.setText(datetime.now().strftime("%Y-%m-%d"))
         self.observation.clear()
-        self.selected_id = None
         self.btn_update.setEnabled(False)
         self.btn_delete.setEnabled(False)
         self.btn_affecter.setEnabled(False)
+        self.table.clearSelection()
 
     def add_product(self):
         if not self.nom.text().strip():
-            QMessageBox.warning(self, "Champ requis", "La désignation est obligatoire.")
+            QMessageBox.warning(self, "Erreur", "La désignation est obligatoire.")
             return
-
         conn = get_conn()
         c = conn.cursor()
-        c.execute("""
-            INSERT INTO produits (nom, nature, quantite, prix, seuil_min, date_ajout, observation)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            self.nom.text(),
-            self.nature.currentData(),
-            self.quantite.value(),
-            self.prix.value(),
-            self.seuil.value(),
-            self.date.text(),
-            self.observation.text()
-        ))
-        conn.commit()
-        conn.close()
-        QMessageBox.information(self, "Succès", "Produit ajouté.")
-        self.load_table()
-        self.clear_form()
+        try:
+            c.execute("""
+                INSERT INTO produits (nom, nature, quantite, prix, seuil_min, date_ajout, observation)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (self.nom.text().strip(), self.nature.currentText(), self.quantite.value(),
+                  self.prix.value(), self.seuil.value(), self.date.text(), self.observation.text().strip()))
+            conn.commit()
+            QMessageBox.information(self, "Succès", "Article ajouté.")
+            self.clear_form()
+            self.load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", str(e))
+        finally:
+            conn.close()
 
     def update_product(self):
-        if not self.selected_id or not self.nom.text().strip():
+        if not self.selected_id:
+            QMessageBox.warning(self, "Erreur", "Sélectionnez un article.")
             return
-
         conn = get_conn()
         c = conn.cursor()
-        c.execute("""
-            UPDATE produits SET nom=?, nature=?, quantite=?, prix=?, seuil_min=?, date_ajout=?, observation=?
-            WHERE id=?
-        """, (
-            self.nom.text(),
-            self.nature.currentData(),
-            self.quantite.value(),
-            self.prix.value(),
-            self.seuil.value(),
-            self.date.text(),
-            self.observation.text(),
-            self.selected_id
-        ))
-        conn.commit()
-        conn.close()
-        QMessageBox.information(self, "Succès", "Produit modifié.")
-        self.load_table()
-        self.clear_form()
+        try:
+            c.execute("""
+                UPDATE produits SET nom=?, nature=?, quantite=?, prix=?, seuil_min=?, date_ajout=?, observation=?
+                WHERE id=?
+            """, (self.nom.text().strip(), self.nature.currentText(), self.quantite.value(),
+                  self.prix.value(), self.seuil.value(), self.date.text(), self.observation.text().strip(),
+                  self.selected_id))
+            conn.commit()
+            QMessageBox.information(self, "Succès", "Article modifié.")
+            self.clear_form()
+            self.load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", str(e))
+        finally:
+            conn.close()
 
     def delete_product(self):
         if not self.selected_id:
             return
-
-        if QMessageBox.question(self, "Confirmer", "Supprimer ce produit ?") != QMessageBox.Yes:
+        if QMessageBox.question(self, "Confirmer", "Supprimer cet article ?") != QMessageBox.Yes:
             return
-
         conn = get_conn()
         c = conn.cursor()
-        c.execute("DELETE FROM produits WHERE id=?", (self.selected_id,))
-        conn.commit()
-        conn.close()
-        QMessageBox.information(self, "Succès", "Produit supprimé.")
-        self.load_table()
-        self.clear_form()
-
-    def on_export_excel(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Exporter Excel", "", "Excel (*.xlsx)")
-        if path:
-            conn = get_conn()
-            c = conn.cursor()
-            c.execute("SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation FROM produits")
-            rows = c.fetchall()
+        try:
+            c.execute("DELETE FROM produits WHERE id=?", (self.selected_id,))
+            conn.commit()
+            QMessageBox.information(self, "Succès", "Article supprimé.")
+            self.clear_form()
+            self.load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", str(e))
+        finally:
             conn.close()
-            export_excel(rows, path)
-            QMessageBox.information(self, "Exporté", "Fichier Excel créé.")
-
-    def on_export_pdf(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Exporter PDF", "", "PDF (*.pdf)")
-        if path:
-            conn = get_conn()
-            c = conn.cursor()
-            c.execute("SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation FROM produits")
-            rows = c.fetchall()
-            conn.close()
-            export_pdf(rows, path)
-            QMessageBox.information(self, "Exporté", "Fichier PDF créé.")
 
     def update_badge(self):
         conn = get_conn()
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM produits WHERE quantite < seuil_min AND seuil_min > 0")
-        low = c.fetchone()[0]
+        n = c.fetchone()[0]
         conn.close()
-        if low > 0:
-            self.badge_low.setText(f"{low} articles en stock bas")
-            self.badge_low.setProperty("class", "badge")
-            self.badge_low.setStyleSheet("QLabel.badge { color: #D32F2F; font-weight: 600; }")
-        else:
-            self.badge_low.setText("")
+        self.badge_low.setText(f"{n} article(s) en alerte" if n else "")
+
+    def on_export_excel(self):
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation FROM produits ORDER BY nom")
+        rows = c.fetchall()
+        conn.close()
+        if not rows:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Exporter Excel", "", "Excel (*.xlsx)")
+        if path:
+            export_excel(rows, path)
+
+    def on_export_pdf(self):
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT nom, nature, quantite, prix, seuil_min, date_ajout, observation FROM produits ORDER BY nom")
+        rows = c.fetchall()
+        conn.close()
+        if not rows:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Exporter PDF", "", "PDF (*.pdf)")
+        if path:
+            export_pdf(rows, path)
 
     def open_affectation(self):
         if not self.selected_id:
-            QMessageBox.warning(self, "Sélection", "Sélectionnez un article d'abord.")
+            QMessageBox.warning(self, "Sélection requise", "Veuillez sélectionner un article.")
             return
 
-        nom = self.nom.text()
-        stock = self.quantite.value()
-        win = MouvementWindow(self.selected_id, nom, stock)
-        win.show()
-        win.closed.connect(self.load_table)  # Rafraîchir après fermeture (ajoute ça si tu as signal closed, sinon ignore)
+        row = self.table.currentRow()
+        designation = self.table.item(row, 0).text()
+        nature = self.table.item(row, 1).text()
+        try:
+            stock_actuel = int(float(self.table.item(row, 2).text() or 0))
+        except:
+            stock_actuel = 0
+
+        if stock_actuel <= 0:
+            QMessageBox.warning(self, "Stock insuffisant", "Stock disponible insuffisant.")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Affectation / Sortie")
+        dialog.setFixedSize(480, 320)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        lbl_info = QLabel(f"<b>{designation}</b><br><small>{nature} • Stock : {stock_actuel}</small>")
+        lbl_info.setStyleSheet("font-size:14px; color:#1A237E;")
+        layout.addWidget(lbl_info)
+
+        layout.addWidget(QLabel("Destinataire :"))
+        combo_dest = QComboBox()
+        combo_dest.addItems(DESTINATAIRES)
+        layout.addWidget(combo_dest)
+
+        layout.addWidget(QLabel("Quantité à affecter :"))
+        spin_qte = QSpinBox()
+        spin_qte.setRange(1, max(1, stock_actuel))
+        spin_qte.setValue(1)
+        layout.addWidget(spin_qte)
+
+        layout.addWidget(QLabel("Observation :"))
+        edit_obs = QLineEdit()
+        edit_obs.setPlaceholderText("N° bon, remarque... (facultatif)")
+        layout.addWidget(edit_obs)
+
+        layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+        btn_annuler = QPushButton("Annuler")
+        btn_valider = QPushButton("Valider")
+        btn_valider.setStyleSheet("background:#D81B60; color:white;")
+
+        btn_annuler.clicked.connect(dialog.reject)
+        btn_valider.clicked.connect(lambda: self.valider_affectation(
+            dialog, self.selected_id, spin_qte.value(), combo_dest.currentText(), edit_obs.text()
+        ))
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_annuler)
+        btn_layout.addWidget(btn_valider)
+        layout.addLayout(btn_layout)
+
+        dialog.exec_()
+
+    def valider_affectation(self, dialog, produit_id, quantite, destinataire, observation):
+        if quantite <= 0:
+            QMessageBox.warning(self, "Erreur", "Quantité invalide.")
+            return
+
+        conn = get_conn()
+        c = conn.cursor()
+        try:
+            c.execute("SELECT quantite FROM produits WHERE id = ?", (produit_id,))
+            stock = c.fetchone()[0]
+
+            if stock < quantite:
+                QMessageBox.warning(self, "Stock insuffisant", f"Stock disponible : {stock}")
+                return
+
+            new_stock = stock - quantite
+            c.execute("UPDATE produits SET quantite = ? WHERE id = ?", (new_stock, produit_id))
+
+            date_mvt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("""
+                INSERT INTO mouvements (produit_id, type, quantite, date_mvt, service, observation)
+                VALUES (?, 'SORTIE', ?, ?, ?, ?)
+            """, (produit_id, quantite, date_mvt, destinataire, observation.strip()))
+
+            conn.commit()
+            QMessageBox.information(self, "Succès", f"Affectation enregistrée.\nStock restant : {new_stock}")
+            self.load_table()
+            self.update_badge()
+            dialog.accept()
+
+        except Exception as e:
+            conn.rollback()
+            QMessageBox.critical(self, "Erreur", str(e))
+        finally:
+            conn.close()
 
     def ouvrir_historique_article(self):
         if not self.selected_id:
-            QMessageBox.warning(self, "Sélection", "Sélectionnez un article pour voir son historique.")
+            QMessageBox.warning(self, "Sélection requise", "Sélectionnez un article.")
             return
 
         conn = get_conn()
@@ -397,166 +453,116 @@ class MagasinApp(QMainWindow):
         conn.close()
 
         self._ouvrir_fenetre_historique(
-            title=f"Historique - {nom}",
+            title=f"Historique – {nom}",
             filtre_article=self.selected_id,
             prefiltre_article=True
         )
 
     def ouvrir_historique_par_destinataire(self):
         dest, ok = QInputDialog.getItem(
-            self,
-            "Filtrer par destinataire",
-            "Choisir le bureau ou CB :",
-            ["Tous"] + DESTINATAIRES,  # "Tous" pour aucun filtre
-            0,
-            False
+            self, "Filtrer par destinataire", "Bureau / CB :", ["Tous"] + DESTINATAIRES, 0, False
         )
-
         if not ok:
             return
 
-        title = f"Historique - {dest}" if dest != "Tous" else "Historique complet tous destinataires"
+        title = "Historique complet" if dest == "Tous" else f"Historique – {dest}"
+        filtre = None if dest == "Tous" else dest
 
-        self._ouvrir_fenetre_historique(
-            title=title,
-            filtre_destinataire=dest if dest != "Tous" else None
-        )
+        self._ouvrir_fenetre_historique(title=title, filtre_destinataire=filtre)
 
-    def _ouvrir_fenetre_historique(self, title="Historique des Mouvements", 
-                                 filtre_article=None, prefiltre_article=False,
-                                 filtre_destinataire=None):
+    def _ouvrir_fenetre_historique(self, title="Historique des Mouvements",
+                                   filtre_article=None, prefiltre_article=False,
+                                   filtre_destinataire=None):
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         dialog.resize(1100, 680)
 
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(10, 10, 10, 10)
 
-        # Barre de filtres rapide
         filtres = QHBoxLayout()
-
-        lbl_article = QLabel("Article :")
         edit_article = QLineEdit()
         if prefiltre_article:
-            edit_article.setText(title.split(" - ")[-1])  # nom déjà connu
+            edit_article.setText(title.split("–")[-1].strip())
             edit_article.setReadOnly(True)
 
-        lbl_dest = QLabel("Destinataire :")
         combo_dest = QComboBox()
         combo_dest.addItem("Tous", "")
-        for d in DESTINATAIRES:
-            combo_dest.addItem(d, d)
+        combo_dest.addItems(DESTINATAIRES)
         if filtre_destinataire:
-            index = combo_dest.findData(filtre_destinataire)
-            if index >= 0:
-                combo_dest.setCurrentIndex(index)
+            idx = combo_dest.findData(filtre_destinataire)
+            if idx >= 0:
+                combo_dest.setCurrentIndex(idx)
 
-        lbl_type = QLabel("Type :")
         combo_type = QComboBox()
         combo_type.addItems(["Tous", "ENTREE", "SORTIE"])
 
-        filtres.addWidget(lbl_article)
+        filtres.addWidget(QLabel("Article :"))
         filtres.addWidget(edit_article)
-        filtres.addSpacing(15)
-        filtres.addWidget(lbl_dest)
+        filtres.addSpacing(20)
+        filtres.addWidget(QLabel("Destinataire :"))
         filtres.addWidget(combo_dest)
-        filtres.addSpacing(15)
-        filtres.addWidget(lbl_type)
+        filtres.addSpacing(20)
+        filtres.addWidget(QLabel("Type :"))
         filtres.addWidget(combo_type)
         filtres.addStretch()
-
         layout.addLayout(filtres)
 
-        # Tableau
         table = QTableWidget()
         table.setColumnCount(8)
         table.setHorizontalHeaderLabels([
             "Date", "Type", "Article", "Qté", "Destinataire", "Observation", "Stock après", "ID"
         ])
-        table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        table.verticalHeader().setVisible(False)
-        table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setEditTriggers(QTableWidget.NoEditTriggers)
-
         layout.addWidget(table)
 
         def charger():
-            article_txt = edit_article.text().strip()
-            dest_val = combo_dest.currentData()
-            type_val = combo_type.currentText()
-
             conn = get_conn()
             c = conn.cursor()
-
             query = """
-                SELECT 
-                    m.date_mvt,
-                    m.type,
-                    p.nom,
-                    m.quantite,
-                    m.service,
-                    m.observation,
-                    p.quantite AS stock_apres,
-                    m.id
-                FROM mouvements m
-                JOIN produits p ON m.produit_id = p.id
-                WHERE 1=1
+                SELECT m.date_mvt, m.type, p.nom, m.quantite, m.service, m.observation, p.quantite, m.id
+                FROM mouvements m JOIN produits p ON m.produit_id = p.id WHERE 1=1
             """
             params = []
-
-            if filtre_article is not None:
+            if filtre_article:
                 query += " AND m.produit_id = ?"
                 params.append(filtre_article)
-            elif article_txt:
+            elif edit_article.text().strip():
                 query += " AND p.nom LIKE ?"
-                params.append(f"%{article_txt}%")
-
-            if dest_val:
+                params.append(f"%{edit_article.text().strip()}%")
+            if combo_dest.currentData():
                 query += " AND m.service = ?"
-                params.append(dest_val)
-            elif filtre_destinataire:
-                query += " AND m.service = ?"
-                params.append(filtre_destinataire)
-
-            if type_val != "Tous":
+                params.append(combo_dest.currentData())
+            if combo_type.currentText() != "Tous":
                 query += " AND m.type = ?"
-                params.append(type_val)
-
-            query += " ORDER BY m.date_mvt DESC LIMIT 2000"
-
+                params.append(combo_type.currentText())
+            query += " ORDER BY m.date_mvt DESC LIMIT 1500"
             c.execute(query, params)
             rows = c.fetchall()
             conn.close()
 
             table.setRowCount(len(rows))
-
             for i, row in enumerate(rows):
                 for j, val in enumerate(row):
-                    item = QTableWidgetItem(str(val) if val is not None else "")
-                    
+                    item = QTableWidgetItem(str(val))
                     if j == 1:  # Type
                         color = "#2E7D32" if val == "ENTREE" else "#D32F2F" if val == "SORTIE" else "#555"
                         item.setForeground(QColor(color))
-                    
-                    if j == 3:  # Quantité
-                        item.setTextAlignment(Qt.AlignCenter)
-                        if row[1] == "SORTIE":
-                            item.setText(f"-{val}")
-                    
-                    if j == 6:  # Stock après
-                        item.setTextAlignment(Qt.AlignRight)
-                    
+                    if j == 3 and row[1] == "SORTIE":
+                        item.setText(f"-{val}")
                     table.setItem(i, j, item)
 
-            table.resizeRowsToContents()
-
-        # Connexions pour rafraîchissement automatique
         edit_article.textChanged.connect(charger)
         combo_dest.currentIndexChanged.connect(charger)
         combo_type.currentIndexChanged.connect(charger)
-
-        # Chargement initial
         charger()
 
         dialog.exec_()
+
+
+# Pour tester rapidement (optionnel)
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    window = MagasinApp()
+    window.show()
+    sys.exit(app.exec_())
