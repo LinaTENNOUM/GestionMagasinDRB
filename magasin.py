@@ -5,7 +5,7 @@ from datetime import datetime
 
 from database import get_conn
 from widgets import ModernComboBox, StyledItemDelegate
-from export_utils import export_excel, export_pdf
+from export_utils import export_excel, export_pdf, export_history_excel, export_history_pdf
 
 DESTINATAIRES = [
     "CBW Alger", "CBW Boumerdes", "CBW Laghouat", "CBW Bouira",
@@ -76,7 +76,7 @@ class MagasinApp(QMainWindow):
 
         # === RECHERCHE + FILTRE ===
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Rechercher par désignation...")
+        self.search.setPlaceholderText("Rechercher par article...")
         self.search.textChanged.connect(self.load_table)
 
         self.filter_nature = ModernComboBox()
@@ -104,7 +104,7 @@ class MagasinApp(QMainWindow):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Désignation", "Nature", "Quantité", "Prix", "Seuil mini", "Date ajout", "Observation"
+            "Article", "Nature", "Quantité", "Prix", "Seuil mini", "Date ajout", "Observation"
         ])
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -129,7 +129,7 @@ class MagasinApp(QMainWindow):
         self.observation = QLineEdit()
 
         form = QFormLayout()
-        form.addRow("Désignation *", self.nom)
+        form.addRow("Article *", self.nom)
         form.addRow("Nature", self.nature)
         form.addRow("Observation", self.observation)
 
@@ -250,7 +250,7 @@ class MagasinApp(QMainWindow):
 
     def add_product(self):
         if not self.nom.text().strip():
-            QMessageBox.warning(self, "Erreur", "La désignation est obligatoire.")
+            QMessageBox.warning(self, "Erreur", "L'article est obligatoire.")
             return
         conn = get_conn()
         c = conn.cursor()
@@ -347,7 +347,7 @@ class MagasinApp(QMainWindow):
             return
 
         row = self.table.currentRow()
-        designation = self.table.item(row, 0).text()
+        article = self.table.item(row, 0).text()
         nature = self.table.item(row, 1).text()
         try:
             stock_actuel = int(float(self.table.item(row, 2).text() or 0))
@@ -366,7 +366,7 @@ class MagasinApp(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        lbl_info = QLabel(f"<b>{designation}</b><br><small>{nature} • Stock : {stock_actuel}</small>")
+        lbl_info = QLabel(f"<b>{article}</b><br><small>{nature} • Stock : {stock_actuel}</small>")
         lbl_info.setStyleSheet("font-size:14px; color:#1A237E;")
         layout.addWidget(lbl_info)
 
@@ -493,33 +493,45 @@ class MagasinApp(QMainWindow):
             if idx >= 0:
                 combo_dest.setCurrentIndex(idx)
 
-        combo_type = QComboBox()
-        combo_type.addItems(["Tous", "ENTREE", "SORTIE"])
-
         filtres.addWidget(QLabel("Article :"))
         filtres.addWidget(edit_article)
         filtres.addSpacing(20)
         filtres.addWidget(QLabel("Destinataire :"))
         filtres.addWidget(combo_dest)
         filtres.addSpacing(20)
-        filtres.addWidget(QLabel("Type :"))
-        filtres.addWidget(combo_type)
+
+        is_dest_hist = filtre_destinataire is not None
+        if not is_dest_hist:
+            combo_type = QComboBox()
+            combo_type.addItems(["Tous", "ENTREE", "SORTIE"])
+            filtres.addWidget(QLabel("Type :"))
+            filtres.addWidget(combo_type)
         filtres.addStretch()
         layout.addLayout(filtres)
 
         table = QTableWidget()
-        table.setColumnCount(8)
+        table.setColumnCount(7)
         table.setHorizontalHeaderLabels([
-            "Date", "Type", "Article", "Qté", "Destinataire", "Observation", "Stock après", "ID"
+            "Date", "Type", "Article", "Qté", "Destinataire", "Observation", "Stock après"
         ])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(table)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        btn_export_excel = QPushButton("Exporter Excel")
+        btn_export_excel.clicked.connect(lambda: self._export_hist(dialog, 'excel', edit_article.text().strip(), combo_dest.currentData(), combo_type.currentText() if not is_dest_hist else "SORTIE", filtre_article, filtre_destinataire))
+        bottom.addWidget(btn_export_excel)
+        btn_export_pdf = QPushButton("Exporter PDF")
+        btn_export_pdf.clicked.connect(lambda: self._export_hist(dialog, 'pdf', edit_article.text().strip(), combo_dest.currentData(), combo_type.currentText() if not is_dest_hist else "SORTIE", filtre_article, filtre_destinataire))
+        bottom.addWidget(btn_export_pdf)
+        layout.addLayout(bottom)
 
         def charger():
             conn = get_conn()
             c = conn.cursor()
             query = """
-                SELECT m.date_mvt, m.type, p.nom, m.quantite, m.service, m.observation, p.quantite, m.id
+                SELECT m.date_mvt, m.type, p.nom, m.quantite, m.service, m.observation, p.quantite
                 FROM mouvements m JOIN produits p ON m.produit_id = p.id WHERE 1=1
             """
             params = []
@@ -532,9 +544,13 @@ class MagasinApp(QMainWindow):
             if combo_dest.currentData():
                 query += " AND m.service = ?"
                 params.append(combo_dest.currentData())
-            if combo_type.currentText() != "Tous":
+            elif filtre_destinataire:
+                query += " AND m.service = ?"
+                params.append(filtre_destinataire)
+            type_val = combo_type.currentText() if not is_dest_hist else "SORTIE"
+            if type_val != "Tous":
                 query += " AND m.type = ?"
-                params.append(combo_type.currentText())
+                params.append(type_val)
             query += " ORDER BY m.date_mvt DESC LIMIT 1500"
             c.execute(query, params)
             rows = c.fetchall()
@@ -543,21 +559,69 @@ class MagasinApp(QMainWindow):
             table.setRowCount(len(rows))
             for i, row in enumerate(rows):
                 for j, val in enumerate(row):
-                    item = QTableWidgetItem(str(val))
+                    item = QTableWidgetItem(str(val) if val is not None else "")
                     if j == 1:  # Type
                         color = "#2E7D32" if val == "ENTREE" else "#D32F2F" if val == "SORTIE" else "#555"
                         item.setForeground(QColor(color))
-                    if j == 3 and row[1] == "SORTIE":
-                        item.setText(f"-{val}")
+                    if j == 3:  # Qté
+                        item.setTextAlignment(Qt.AlignCenter)
+                    if j == 6:  # Stock après
+                        item.setTextAlignment(Qt.AlignRight)
                     table.setItem(i, j, item)
+
+            table.resizeRowsToContents()
+            return rows
+
+        rows = charger()
+        dialog.current_rows = rows
 
         edit_article.textChanged.connect(charger)
         combo_dest.currentIndexChanged.connect(charger)
-        combo_type.currentIndexChanged.connect(charger)
-        charger()
+        if not is_dest_hist:
+            combo_type.currentIndexChanged.connect(charger)
 
         dialog.exec_()
 
+    def _export_hist(self, dialog, mode, article_txt, dest_val, type_val, filtre_article, filtre_destinataire):
+        conn = get_conn()
+        c = conn.cursor()
+        query = """
+            SELECT m.date_mvt, m.type, p.nom, m.quantite, m.service, m.observation, p.quantite
+            FROM mouvements m JOIN produits p ON m.produit_id = p.id WHERE 1=1
+        """
+        params = []
+        if filtre_article:
+            query += " AND m.produit_id = ?"
+            params.append(filtre_article)
+        elif article_txt:
+            query += " AND p.nom LIKE ?"
+            params.append(f"%{article_txt}%")
+        if dest_val:
+            query += " AND m.service = ?"
+            params.append(dest_val)
+        elif filtre_destinataire:
+            query += " AND m.service = ?"
+            params.append(filtre_destinataire)
+        if type_val != "Tous":
+            query += " AND m.type = ?"
+            params.append(type_val)
+        query += " ORDER BY m.date_mvt DESC"
+        c.execute(query, params)
+        rows = c.fetchall()
+        conn.close()
+
+        if not rows:
+            QMessageBox.warning(dialog, "Export", "Aucun données à exporter.")
+            return
+
+        if mode == 'excel':
+            path, _ = QFileDialog.getSaveFileName(dialog, "Exporter Excel", "", "Excel (*.xlsx)")
+            if path:
+                export_history_excel(rows, path)
+        else:
+            path, _ = QFileDialog.getSaveFileName(dialog, "Exporter PDF", "", "PDF (*.pdf)")
+            if path:
+                export_history_pdf(rows, path)
 
 # Pour tester rapidement (optionnel)
 if __name__ == "__main__":
