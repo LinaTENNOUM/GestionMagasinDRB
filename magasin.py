@@ -57,17 +57,17 @@ class MagasinApp(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(Qt.TopToolBarArea, toolbar)
 
-        btn_hist_article = QPushButton("Hist. Article")
+        btn_hist_article = QPushButton("Historique par article")
         btn_hist_article.clicked.connect(self.ouvrir_historique_article)
         toolbar.addWidget(btn_hist_article)
 
-        btn_hist_dest = QPushButton("Hist. par Bureau/CB")
+        btn_hist_dest = QPushButton("Historique par destinataire")
         btn_hist_dest.clicked.connect(self.ouvrir_historique_par_destinataire)
         toolbar.addWidget(btn_hist_dest)
 
-        self.btn_affecter = QPushButton("Affecter / Sortie")
+        self.btn_affecter = QPushButton("Affectation")
         self.btn_affecter.setStyleSheet("""
-            QPushButton { background-color: #D81B60; color: white; padding: 8px 16px; border-radius: 10px; }
+            QPushButton { background-color: #D32F2FA4; color: white; padding: 8px 16px; border-radius: 10px; }
             QPushButton:hover { background-color: #E91E63; }
         """)
         self.btn_affecter.clicked.connect(self.open_affectation)
