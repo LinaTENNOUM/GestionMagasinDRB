@@ -342,6 +342,9 @@ class MagasinApp(QMainWindow):
             export_pdf(rows, path)
 
     def open_affectation(self):
+        # Remplacer la méthode open_affectation par cette version améliorée :
+
+    
         if not self.selected_id:
             QMessageBox.warning(self, "Sélection requise", "Veuillez sélectionner un article.")
             return
@@ -359,46 +362,181 @@ class MagasinApp(QMainWindow):
             return
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("Affectation / Sortie")
-        dialog.setFixedSize(480, 320)
+        dialog.setWindowTitle("Affectation de matériel")
+        dialog.setFixedSize(500, 400)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #f5f5f5;
+            }
+            QLabel {
+                font-size: 13px;
+                color: #333;
+            }
+            QLineEdit, QComboBox, QSpinBox {
+                padding: 8px;
+                border: 2px solid #ddd;
+                border-radius: 6px;
+                background: white;
+                font-size: 13px;
+                min-height: 20px;
+            }
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+                border-color: #1976D2;
+            }
+            QPushButton {
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: bold;
+                min-width: 100px;
+            }
+        """)
 
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(15)
 
-        lbl_info = QLabel(f"<b>{article}</b><br><small>{nature} • Stock : {stock_actuel}</small>")
-        lbl_info.setStyleSheet("font-size:14px; color:#1A237E;")
-        layout.addWidget(lbl_info)
+        # En-tête avec informations produit
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: #1976D2;
+                border-radius: 10px;
+                padding: 15px;
+            }
+            QLabel {
+                color: white;
+            }
+        """)
+        header_layout = QVBoxLayout(header_frame)
 
-        layout.addWidget(QLabel("Destinataire :"))
+        lbl_article = QLabel(article)
+        lbl_article.setStyleSheet("font-size: 18px; font-weight: bold;")
+        lbl_article.setWordWrap(True)
+        header_layout.addWidget(lbl_article)
+
+        lbl_info = QLabel(f"Catégorie : {nature} | Stock disponible : {stock_actuel}")
+        lbl_info.setStyleSheet("font-size: 13px; opacity: 0.9;")
+        header_layout.addWidget(lbl_info)
+
+        layout.addWidget(header_frame)
+
+        # Formulaire
+        form_frame = QFrame()
+        form_frame.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+            }
+        """)
+        form_layout = QFormLayout(form_frame)
+        form_layout.setSpacing(15)
+        form_layout.setLabelAlignment(Qt.AlignRight)
+
+        # Destinataire
+        lbl_dest = QLabel("Destinataire :")
+        lbl_dest.setStyleSheet("font-weight: bold; color: #555;")
         combo_dest = QComboBox()
         combo_dest.addItems(DESTINATAIRES)
-        layout.addWidget(combo_dest)
+        combo_dest.setEditable(True)
+        combo_dest.setInsertPolicy(QComboBox.InsertAtTop)
+        form_layout.addRow(lbl_dest, combo_dest)
 
-        layout.addWidget(QLabel("Quantité à affecter :"))
+        # Quantité
+        lbl_qte = QLabel("Quantité à affecter :")
+        lbl_qte.setStyleSheet("font-weight: bold; color: #555;")
         spin_qte = QSpinBox()
         spin_qte.setRange(1, max(1, stock_actuel))
         spin_qte.setValue(1)
-        layout.addWidget(spin_qte)
+        spin_qte.setSuffix(f" / {stock_actuel} disponible(s)")
+        spin_qte.setStyleSheet("""
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 20px;
+                height: 20px;
+            }
+        """)
+        form_layout.addRow(lbl_qte, spin_qte)
 
-        layout.addWidget(QLabel("Observation :"))
+        # Observation
+        lbl_obs = QLabel("Observation :")
+        lbl_obs.setStyleSheet("font-weight: bold; color: #555;")
         edit_obs = QLineEdit()
-        edit_obs.setPlaceholderText("N° bon, remarque... (facultatif)")
-        layout.addWidget(edit_obs)
+        edit_obs.setPlaceholderText("N° bon de sortie, remarque...")
+        form_layout.addRow(lbl_obs, edit_obs)
+
+        layout.addWidget(form_frame)
+
+        # Récapitulatif
+        recap_frame = QFrame()
+        recap_frame.setStyleSheet("""
+            QFrame {
+                background: #E3F2FD;
+                border-radius: 8px;
+                padding: 12px;
+            }
+            QLabel {
+                color: #0D47A1;
+            }
+        """)
+        recap_layout = QHBoxLayout(recap_frame)
+        
+        self.lbl_recap = QLabel(f"Stock après affectation : {stock_actuel} - 1 = {stock_actuel - 1}")
+        self.lbl_recap.setStyleSheet("font-size: 14px; font-weight: bold;")
+        recap_layout.addWidget(self.lbl_recap)
+        
+        # Mise à jour du récapitulatif quand la quantité change
+        def update_recap():
+            qte = spin_qte.value()
+            reste = stock_actuel - qte
+            self.lbl_recap.setText(f"Stock après affectation : {stock_actuel} - {qte} = {reste}")
+            if reste < 0:
+                self.lbl_recap.setStyleSheet("font-size: 14px; font-weight: bold; color: #D32F2F;")
+            else:
+                self.lbl_recap.setStyleSheet("font-size: 14px; font-weight: bold; color: #0D47A1;")
+        
+        spin_qte.valueChanged.connect(update_recap)
+        
+        layout.addWidget(recap_frame)
 
         layout.addStretch()
 
+        # Boutons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
         btn_annuler = QPushButton("Annuler")
-        btn_valider = QPushButton("Valider")
-        btn_valider.setStyleSheet("background:#D81B60; color:white;")
+        btn_annuler.setStyleSheet("""
+            QPushButton {
+                background-color: #9e9e9e;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #757575;
+            }
+        """)
+
+        btn_valider = QPushButton("Valider l'affectation")
+        btn_valider.setStyleSheet("""
+            QPushButton {
+                background-color: #1976D2;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1565C0;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
 
         btn_annuler.clicked.connect(dialog.reject)
         btn_valider.clicked.connect(lambda: self.valider_affectation(
             dialog, self.selected_id, spin_qte.value(), combo_dest.currentText(), edit_obs.text()
         ))
 
-        btn_layout.addStretch()
         btn_layout.addWidget(btn_annuler)
         btn_layout.addWidget(btn_valider)
         layout.addLayout(btn_layout)
@@ -454,8 +592,7 @@ class MagasinApp(QMainWindow):
 
         self._ouvrir_fenetre_historique(
             title=f"Historique – {nom}",
-            filtre_article=self.selected_id,
-            prefiltre_article=True
+            prefiltre_article=nom      # on pré-remplit avec le nom, sans bloquer l'ID
         )
 
     def ouvrir_historique_par_destinataire(self):
@@ -471,30 +608,43 @@ class MagasinApp(QMainWindow):
         self._ouvrir_fenetre_historique(title=title, filtre_destinataire=filtre)
 
     def _ouvrir_fenetre_historique(self, title="Historique des Mouvements",
-                                   filtre_article=None, prefiltre_article=False,
-                                   filtre_destinataire=None):
+                               prefiltre_article=None,
+                               filtre_destinataire=None):
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         dialog.resize(1100, 680)
 
         layout = QVBoxLayout(dialog)
 
-        # Barre de filtres
+        # --- Barre de filtres ---
         filtres = QHBoxLayout()
 
-        edit_article = QLineEdit()
-        if prefiltre_article and filtre_article:
-            conn_temp = get_conn()
-            c_temp = conn_temp.cursor()
-            c_temp.execute("SELECT nom FROM produits WHERE id=?", (filtre_article,))
-            nom_pref = c_temp.fetchone()
-            conn_temp.close()
-            if nom_pref:
-                edit_article.setText(nom_pref[0])
-        # PAS de setReadOnly(True) → on laisse modifiable
+        # COMBOBOX pour les articles (avec liste déroulante)
+        combo_article = QComboBox()
+        combo_article.setEditable(True)                     # permet aussi de taper
+        combo_article.setPlaceholderText("Choisir un article...")
+        combo_article.addItem("Tous les articles", None)    # option pour tout afficher
 
+        # Remplir la combo avec les noms d'articles existants
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT DISTINCT nom FROM produits ORDER BY nom")
+        for (nom,) in c.fetchall():
+            combo_article.addItem(nom, nom)
+        conn.close()
+
+        if prefiltre_article:
+            idx = combo_article.findText(prefiltre_article)
+            if idx >= 0:
+                combo_article.setCurrentIndex(idx)
+            else:
+                combo_article.setCurrentIndex(0)   # "Tous les articles"
+        else:
+            combo_article.setCurrentIndex(0)
+
+        # COMBOBOX pour les destinataires
         combo_dest = QComboBox()
-        combo_dest.addItem("Tous", "")
+        combo_dest.addItem("Tous", None)            # None = pas de filtre
         for d in DESTINATAIRES:
             combo_dest.addItem(d, d)
         if filtre_destinataire:
@@ -505,7 +655,7 @@ class MagasinApp(QMainWindow):
         is_hist_par_dest = filtre_destinataire is not None
 
         filtres.addWidget(QLabel("Article :"))
-        filtres.addWidget(edit_article)
+        filtres.addWidget(combo_article)
         filtres.addSpacing(20)
         filtres.addWidget(QLabel("Destinataire :"))
         filtres.addWidget(combo_dest)
@@ -520,23 +670,23 @@ class MagasinApp(QMainWindow):
         filtres.addStretch()
         layout.addLayout(filtres)
 
-        # Tableau avec les nouvelles colonnes
-        table = QTableWidget()
+        # --- Tableau ---
         if is_hist_par_dest:
+            table = QTableWidget()
             table.setColumnCount(6)
             table.setHorizontalHeaderLabels([
-                "Date", "Article", "Quantité", "Destinataire", "Stock après affectation", "Observation"
+                "Date", "Article", "Quantité", "Destinataire", "Stock après", "Observation"
             ])
         else:
+            table = QTableWidget()
             table.setColumnCount(7)
             table.setHorizontalHeaderLabels([
                 "Date", "Article", "Type", "Quantité", "Destinataire", "Stock après", "Observation"
             ])
-
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(table)
 
-        # Boutons export en bas
+        # --- Boutons d'export ---
         bottom = QHBoxLayout()
         bottom.addStretch()
         btn_excel = QPushButton("Exporter Excel")
@@ -545,10 +695,11 @@ class MagasinApp(QMainWindow):
         bottom.addWidget(btn_pdf)
         layout.addLayout(bottom)
 
+        # --- Fonction de chargement des données ---
         def charger():
-            article_txt = edit_article.text().strip()
-            dest_txt = combo_dest.currentText()
-            dest_val = combo_dest.currentData() if combo_dest.currentData() else dest_txt
+            # Valeurs actuelles des filtres
+            article_data = combo_article.currentData()   # None si "Tous"
+            dest_data = combo_dest.currentData()         # None si "Tous"
 
             conn = get_conn()
             c = conn.cursor()
@@ -568,27 +719,24 @@ class MagasinApp(QMainWindow):
             """
             params = []
 
-            if filtre_article:
-                query += " AND m.produit_id = ?"
-                params.append(filtre_article)
-            elif article_txt:
-                query += " AND p.nom LIKE ?"
-                params.append(f"%{article_txt}%")
+            # Filtre article (exact, car on a une liste de noms)
+            if article_data is not None:
+                query += " AND p.nom = ?"
+                params.append(article_data)
 
-            if dest_val and dest_val != "Tous":
+            # Filtre destinataire (uniquement basé sur la combo)
+            if dest_data is not None:
                 query += " AND m.service = ?"
-                params.append(dest_val)
-            elif filtre_destinataire:
-                query += " AND m.service = ?"
-                params.append(filtre_destinataire)
+                params.append(dest_data)
 
+            # Filtre type (sauf pour historique destinataire)
             if not is_hist_par_dest:
                 type_val = combo_type.currentText()
                 if type_val != "Tous":
                     query += " AND m.type = ?"
                     params.append(type_val)
             else:
-                # Pour hist par destinataire → on force SORTIE
+                # Pour l'historique par destinataire, on ne montre que les sorties
                 query += " AND m.type = 'SORTIE'"
 
             query += " ORDER BY m.date_mvt DESC LIMIT 1500"
@@ -597,7 +745,7 @@ class MagasinApp(QMainWindow):
             rows = c.fetchall()
             conn.close()
 
-            # Ajustement affichage colonnes selon le type d'historique
+            # Remplissage du tableau
             if is_hist_par_dest:
                 table.setRowCount(len(rows))
                 for i, row in enumerate(rows):
@@ -605,18 +753,15 @@ class MagasinApp(QMainWindow):
                         QTableWidgetItem(row[0]),               # Date
                         QTableWidgetItem(row[1]),               # Article
                         QTableWidgetItem(str(row[3])),          # Quantité
-                        QTableWidgetItem(row[4]),               # Destinataire
+                        QTableWidgetItem(row[4] or ""),         # Destinataire
                         QTableWidgetItem(str(row[6])),          # Stock après
                         QTableWidgetItem(row[5] or "")          # Observation
                     ]
-                    for item in items:
-                        item.setTextAlignment(Qt.AlignCenter if items.index(item) in [2,4] else Qt.AlignLeft)
-                    table.setItem(i, 0, items[0])
-                    table.setItem(i, 1, items[1])
-                    table.setItem(i, 2, items[2])
-                    table.setItem(i, 3, items[3])
-                    table.setItem(i, 4, items[4])
-                    table.setItem(i, 5, items[5])
+                    for j, item in enumerate(items):
+                        if j in (2, 4):
+                            item.setTextAlignment(Qt.AlignCenter)
+                    for j in range(6):
+                        table.setItem(i, j, items[j])
             else:
                 table.setRowCount(len(rows))
                 for i, row in enumerate(rows):
@@ -625,39 +770,34 @@ class MagasinApp(QMainWindow):
                         QTableWidgetItem(row[1]),               # Article
                         QTableWidgetItem(row[2]),               # Type
                         QTableWidgetItem(str(row[3])),          # Quantité
-                        QTableWidgetItem(row[4]),               # Destinataire
+                        QTableWidgetItem(row[4] or ""),         # Destinataire
                         QTableWidgetItem(str(row[6])),          # Stock après
                         QTableWidgetItem(row[5] or "")          # Observation
                     ]
-                    # Mise en forme type
                     if row[2] == "SORTIE":
                         items[2].setForeground(QColor("#D32F2F"))
                     elif row[2] == "ENTREE":
                         items[2].setForeground(QColor("#2E7D32"))
                     for j, item in enumerate(items):
-                        if j in [3,5]:
+                        if j in (3, 5):
                             item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(i, 0, items[0])
-                    table.setItem(i, 1, items[1])
-                    table.setItem(i, 2, items[2])
-                    table.setItem(i, 3, items[3])
-                    table.setItem(i, 4, items[4])
-                    table.setItem(i, 5, items[5])
-                    table.setItem(i, 6, items[6])
+                    for j in range(7):
+                        table.setItem(i, j, items[j])
 
             table.resizeRowsToContents()
             return rows
 
-        # Connexions
-        edit_article.textChanged.connect(charger)
+        # Connexion des signaux
+        combo_article.currentIndexChanged.connect(charger)
         combo_dest.currentIndexChanged.connect(charger)
         if not is_hist_par_dest:
             combo_type.currentIndexChanged.connect(charger)
 
-        # Export handlers
+        # Gestion des exports
         def export_excel_action():
-            rows = charger()  # recharge pour avoir les données actuelles filtrées
+            rows = charger()
             if not rows:
+                QMessageBox.warning(dialog, "Export", "Aucune donnée à exporter.")
                 return
             path, _ = QFileDialog.getSaveFileName(dialog, "Exporter Excel", "", "Excel (*.xlsx)")
             if path:
@@ -666,6 +806,7 @@ class MagasinApp(QMainWindow):
         def export_pdf_action():
             rows = charger()
             if not rows:
+                QMessageBox.warning(dialog, "Export", "Aucune donnée à exporter.")
                 return
             path, _ = QFileDialog.getSaveFileName(dialog, "Exporter PDF", "", "PDF (*.pdf)")
             if path:
@@ -677,7 +818,7 @@ class MagasinApp(QMainWindow):
         # Chargement initial
         charger()
 
-        dialog.exec_()    
+        dialog.exec_()
     def _export_hist(self, dialog, mode, article_txt, dest_val, type_val, filtre_article, filtre_destinataire):
         conn = get_conn()
         c = conn.cursor()
@@ -726,3 +867,4 @@ if __name__ == "__main__":
     window = MagasinApp()
     window.show()
     sys.exit(app.exec_())
+
