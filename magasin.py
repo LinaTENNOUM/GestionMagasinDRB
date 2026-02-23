@@ -140,12 +140,26 @@ class MagasinApp(QMainWindow):
         hnums.addWidget(self._labeled("Date ajout", self.date))
 
         # === BOUTONS CRUD + EXPORT ===
-        self.btn_add = QPushButton("Ajouter"); self.btn_add.clicked.connect(self.add_product)
-        self.btn_update = QPushButton("Modifier"); self.btn_update.clicked.connect(self.update_product); self.btn_update.setEnabled(False)
-        self.btn_delete = QPushButton("Supprimer"); self.btn_delete.clicked.connect(self.delete_product); self.btn_delete.setEnabled(False)
-        self.btn_clear = QPushButton("Nouveau / Vider"); self.btn_clear.clicked.connect(self.clear_form)
-        self.btn_export_xlsx = QPushButton("Exporter Excel"); self.btn_export_xlsx.clicked.connect(self.on_export_excel)
-        self.btn_export_pdf = QPushButton("Exporter PDF"); self.btn_export_pdf.clicked.connect(self.on_export_pdf)
+        self.btn_add = QPushButton("➕ Ajouter")
+        self.btn_add.clicked.connect(self.add_product)
+
+        self.btn_update = QPushButton("✏️ Modifier")
+        self.btn_update.clicked.connect(self.update_product)
+        self.btn_update.setEnabled(False)
+
+        self.btn_delete = QPushButton("🗑️ Supprimer")
+        self.btn_delete.clicked.connect(self.delete_product)
+        self.btn_delete.setEnabled(False)
+
+        self.btn_clear = QPushButton("🔄 Nouveau / Vider")
+        self.btn_clear.clicked.connect(self.clear_form)
+
+        self.btn_export_xlsx = QPushButton("Exporter Excel")
+        self.btn_export_xlsx.clicked.connect(self.on_export_excel)
+
+        self.btn_export_pdf = QPushButton("Exporter PDF")
+        self.btn_export_pdf.clicked.connect(self.on_export_pdf)
+
         self.badge_low = QLabel("")
 
         crud = QHBoxLayout()
@@ -230,9 +244,11 @@ class MagasinApp(QMainWindow):
         self.seuil.setValue(int(float(self.table.item(row, 4).text() or 0)))
         self.date.setText(self.table.item(row, 5).text())
         self.observation.setText(self.table.item(row, 6).text())
+
         self.btn_update.setEnabled(True)
         self.btn_delete.setEnabled(True)
         self.btn_affecter.setEnabled(True)
+        self.btn_add.setEnabled(False)  
 
     def clear_form(self):
         self.selected_id = None
@@ -246,6 +262,7 @@ class MagasinApp(QMainWindow):
         self.btn_update.setEnabled(False)
         self.btn_delete.setEnabled(False)
         self.btn_affecter.setEnabled(False)
+        self.btn_add.setEnabled(True)           # ← RÉACTIVER AJOUTER
         self.table.clearSelection()
 
     def add_product(self):
